@@ -1,0 +1,83 @@
+#!/bin/bash
+
+#
+#
+#	This script is a combination of fcgiwrap and spawn-facgi scripts
+#
+#
+#
+
+
+## ABSOLUTE path to the spawn-fcgi binary
+SPAWNFCGI="/usr/bin/spawn-fcgi"
+
+## ABSOLUTE path to the FastCGI Wrapper
+FCGIPROGRAMPATH="/usr/sbin/"
+FCGIPROGRAM="fcgiwrap"
+
+## bind to unix socket
+FCGISOCKET="/tmp/cgi.sock"
+
+# allowed environment variables separated by spaces
+ALLOWED_ENV="PATH USER"
+
+## if this script is run as root switch to the following user
+USERID=$USER
+SOCKUSERID=www-data
+#CHROOT=/home/www/
+
+#RAILS_ENV="production"
+#export RAILS_ENV
+
+exec 2>&1
+
+ALLOWED_ENV="$ALLOWED_ENV RAILS_ENV"
+
+if test x$UID = x0; then
+   EX="$SPAWNFCGI -n -s $FCGISOCKET -u $USERID -U $SOCKUSERID -- $FCGIPROGRAMPATH$FCGIPROGRAM"
+else
+   EX="$SPAWNFCGI -n -s $FCGISOCKET -- $FCGIPROGRAMPATH$FCGIPROGRAM"
+fi
+
+# copy the allowed environment variables
+E=
+
+for i in $ALLOWED_ENV; do
+   E="$E $i=${!i}"
+done
+
+# Prepare start and stop functions
+USER=www-data
+GROUP=www-data
+RETVAL=0
+start() {
+   echo "Starting fastcgi"
+   sudo start-stop-daemon --quiet --start --background --chuid "www-data" --exec /usr/bin/env -- $E $EX
+   chown $USER:$GROUP /tmp/cgi.sock
+   RETVAL=$?
+}
+
+stop() {
+   echo "Stopping fastcgi"
+   sudo start-stop-daemon --stop --name $FCGIPROGRAM
+   RETVAL=$?
+}
+
+# Test command option
+case "$1" in
+   start)
+      start
+   ;;
+   stop)
+      stop
+   ;;
+   restart)
+      stop
+      start
+   ;;
+   *)
+      echo "Usage: $0 {start|stop|restart}"
+      exit 1
+   ;;
+esac
+exit $RETVAL
